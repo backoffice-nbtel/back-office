@@ -42,11 +42,12 @@ input:focus,select:focus,textarea:focus{outline:2px solid var(--ac);border-color
 </main>
 <script>
 // ===== رابط Google Apps Script =====
-var SCRIPT_URL="https://script.google.com/macros/s/AKfycbyRM-yWj_cJomVTywF4WNMhIu5OSLLl2WIIOcTpj9-JShL42eEIqy0DXiXm9Kwo6qHG/exec";
-var QUOTA=30;        // رصيد احتياطي فقط: الرصيد الفعلي يحدده المدير من تبويب «الأرصدة» في الشيت
+var SCRIPT_URL="https://script.google.com/macros/s/AKfycbwp7kyQ6nOdPvJMlf6G3y7bpmJcs9q0iwYm2nYUWYbBXTHMvkcKwG2gyUaR-Lq7RSaC/exec";
+var QUOTA=30;        // رصيد سنوي احتياطي فقط: الرصيد الفعلي يحدده المدير من تبويب «الأرصدة» في الشيت
+var QUOTA_MONTH=2.5; // رصيد شهري احتياطي فقط: الرصيد الفعلي يحدده المدير من تبويب «الأرصدة» في الشيت
 var WORKDAY_HOURS=8; // ساعات الدوام اليومي (لحساب الإجازة الزمنية كجزء من اليوم)
 // ===================================
-var Q=QUOTA,TYPES=["اعتيادية","مرضية","طارئة","زمنية","بدون راتب"],tabN=1;
+var Q=QUOTA,QM=QUOTA_MONTH,TYPES=["اعتيادية","مرضية","طارئة","زمنية","بدون راتب"],tabN=1;
 function $(i){return document.getElementById(i)}
 function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]})}
 function ls(k,v){try{if(v!==undefined)localStorage.setItem(k,v);return localStorage.getItem(k)||""}catch(e){return ""}}
@@ -67,7 +68,7 @@ function why(x){var m=String(x&&x.message||x);
 async function getRows(code){
   var t=await (await fetch(SCRIPT_URL+"?code="+encodeURIComponent(code!==undefined?code:myCode()))).text(),j;
   try{j=JSON.parse(t)}catch(e){throw new Error("HTML")}
-  if(!j.ok)throw new Error("HTML");if(j.quota!=null&&!isNaN(Number(j.quota)))Q=Number(j.quota);return j.rows||[];
+  if(!j.ok)throw new Error("HTML");if(j.quota!=null&&!isNaN(Number(j.quota)))Q=Number(j.quota);if(j.quotaMonth!=null&&!isNaN(Number(j.quotaMonth)))QM=Number(j.quotaMonth);return j.rows||[];
 }
 function wait(ms){return new Promise(function(r){setTimeout(r,ms)})}
 async function send(){
@@ -97,12 +98,19 @@ async function mine(){
   $("v").innerHTML='<div class="card mu">جاري التحميل...</div>';
   try{
     var rows=await getRows();
-    var y=String(new Date().getFullYear()),used=0;
-    rows.forEach(function(l){if(l.status=="موافق"&&l.type!="بدون راتب"&&String(l.from).slice(0,4)==y)used+=Number(l.days)});
-    used=Math.round(used*100)/100;
+    var now=new Date(),y=String(now.getFullYear()),ym=y+"-"+String(now.getMonth()+1).padStart(2,"0"),used=0,usedM=0;
+    rows.forEach(function(l){
+      if(l.status=="موافق"&&l.type!="بدون راتب"){
+        if(String(l.from).slice(0,4)==y)used+=Number(l.days);
+        if(String(l.from).slice(0,7)==ym)usedM+=Number(l.days);
+      }
+    });
+    used=Math.round(used*100)/100;usedM=Math.round(usedM*100)/100;
     var m={"موافق":"a","مرفوض":"r"};
     if(!rows.length){codeForm("لا توجد طلبات بهذا الرمز. تأكد من الرمز أو قدّم طلباً جديداً.");return}
-    $("v").innerHTML=codeBar()+'<div class="card"><b>رصيدك لسنة '+y+'</b><div class="mu">المستخدم: '+used+' • المتبقي: '+(Math.round((Q-used)*100)/100)+' من '+Q+' يوم</div></div>'+
+    $("v").innerHTML=codeBar()+
+    '<div class="card"><b>رصيدك لسنة '+y+'</b><div class="mu">المستخدم: '+used+' • المتبقي: '+(Math.round((Q-used)*100)/100)+' من '+Q+' يوم</div></div>'+
+    '<div class="card"><b>رصيدك لهذا الشهر</b><div class="mu">المستخدم: '+usedM+' • المتبقي: '+(Math.round((QM-usedM)*100)/100)+' من '+QM+' يوم</div></div>'+
     rows.map(function(l){return '<div class="card"><div class="hd"><b>'+esc(l.type)+'</b><span class="tag '+(m[l.status]||"p")+'">'+esc(l.status)+'</span></div><div class="mu">'+esc(dur(l))+'</div>'+(l.reason?'<div>'+esc(l.reason)+'</div>':'')+(l.note?'<div class="mu">ملاحظة المدير: '+esc(l.note)+'</div>':'')+'</div>'}).join("");
   }catch(x){$("v").innerHTML=codeBar()+'<div class="card mu">تعذر تحميل الطلبات. '+esc(why(x))+'</div>'}
 }
