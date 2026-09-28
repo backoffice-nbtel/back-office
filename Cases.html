@@ -132,7 +132,7 @@
     display:none; align-items:center; justify-content:space-between; background:var(--surface);
     border-bottom:1px solid var(--border); padding:12px 16px; position:sticky; top:0; z-index:20;
   }
-  @media(max-width:860px){ .topbar{display:flex;} #appShell.on{display:block;} .sidebar{position:fixed; inset-inline-start:0; top:0; bottom:0; width:230px; z-index:30; transform:translateX(105%); transition:transform .2s;} html[dir="rtl"] .sidebar.open{transform:translateX(0);} }
+  @media(max-width:1000px){ .topbar{display:flex;} #appShell.on{display:block;} .sidebar{position:fixed; inset-inline-start:0; top:0; bottom:0; width:230px; z-index:30; transform:translateX(105%); transition:transform .2s;} html[dir="rtl"] .sidebar.open{transform:translateX(0);} }
   .topbar .brand-mini{display:flex; align-items:center; gap:8px; font-weight:800; font-size:13.5px;}
   .topbar .brand-mini img{height:22px; background:#fff; border-radius:6px; padding:4px 6px;}
   .burger{background:none; border:none; font-size:20px; cursor:pointer; color:var(--heading);}
@@ -161,6 +161,7 @@
   .card h3{margin:0 0 14px; font-size:15.5px; color:var(--heading);}
 
   table{width:100%; border-collapse:collapse; font-size:13.5px;}
+  td[data-label="Case ID"], td[data-label="التاريخ"]{white-space:nowrap;}
   th{text-align:start; color:var(--muted); font-weight:700; padding:9px 10px; border-bottom:2px solid var(--border); white-space:nowrap; font-size:12.5px;}
   td{padding:10px; border-bottom:1px solid var(--border); vertical-align:middle;}
   tr:hover td{background:var(--hover-row);}
@@ -205,7 +206,7 @@
   .row-actions{display:flex; gap:6px;}
 
   /* ---------- الهاتف والشاشات الصغيرة ---------- */
-  @media(max-width:860px){
+  @media(max-width:1000px){
     .main{padding:16px 14px 28px; max-width:100%;}
     .view-header h2{font-size:18px;}
     .grid-4{grid-template-columns:repeat(2,1fr); gap:10px;}
@@ -238,6 +239,8 @@
     .card:has(table.stack){padding:10px; background:transparent; border:none; box-shadow:none;}
   }
   @media(max-width:380px){ .grid-4{grid-template-columns:1fr 1fr;} .login-card{padding:28px 20px;} }
+  .dash-search{width:100%; padding:12px 14px; border:1.5px solid var(--border); border-radius:10px; background:var(--input-bg); color:var(--text); outline:none; font-size:15px;}
+  .dash-search:focus{border-color:var(--primary);}
   .config-warn{background:var(--warning-bg); color:#8A5A00; border:1px solid #F3D9A8; border-radius:9px; padding:12px 14px; font-size:13px; margin-bottom:16px;}
   .theme-toggle{
     position:fixed; top:18px; left:18px; z-index:60; width:40px; height:40px; border-radius:50%;
@@ -306,6 +309,12 @@
       <!-- لوحة التحكم -->
       <section class="view" id="view-dashboard">
         <div class="view-header"><div><h2>لوحة التحكم</h2><p>نظرة عامة سريعة على الحالات والتذكيرات</p></div></div>
+        <div class="card" style="margin-bottom:16px;">
+          <h3>بحث سريع عن مشترك</h3>
+          <input type="text" id="dashSearch" class="dash-search" placeholder="🔍 اكتب User Name أو اسم المشترك..." oninput="renderDashSearch()" autocomplete="off">
+          <div class="hint" id="dashSearchHint">ابحث بـ User Name أو باسم المشترك وستظهر الحالات المسجّلة له.</div>
+        </div>
+        <div class="card" id="dashSearchWrap" style="display:none;"><div class="table-wrap"><table class="stack" id="dashSearchTable"></table></div></div>
         <div class="grid grid-4" id="dashStats"></div>
         <div class="card" style="margin-top:18px;">
           <h3>أحدث الحالات</h3>
@@ -453,7 +462,7 @@
 /* ==========================================================================
    إعداد الاتصال بالخادم — ضع رابط Google Apps Script Web App هنا
    ========================================================================== */
-var WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwFu-LuqmkaaM2sTrgEsxtN6Mmepixnug4VvaoxRX7qFB6iAnbA91ruYVcwqHkKHBqsAg/exec";
+var WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxJCiXvLDhU37ln4XFiu30bji6Aftq7lhpzGLxqufghi2M3OjQECpLy2YIzDc3sananvA/exec";
 
 /* ==========================================================================
    الوضع الليلي / النهاري
@@ -496,6 +505,24 @@ var STATE = {
 function $(id){ return document.getElementById(id); }
 // يقرأ حقل User Name حتى لو كان اسم العمود في الشيت OLT أو User Name
 function userNameOf(c){ return c.OLT || c['User Name'] || c.UserName || c.Username_ || ''; }
+
+function pad2_(n){ return (n<10?'0':'')+n; }
+function localDateStr(d){ d = d || new Date(); return d.getFullYear()+'-'+pad2_(d.getMonth()+1)+'-'+pad2_(d.getDate()); }
+// يحوّل أي تاريخ قادم من الشيت (نص أو ISO) إلى yyyy-MM-dd
+function fmtDate(v){
+  if (!v) return '';
+  if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
+  var d = new Date(v); if (isNaN(d)) return String(v);
+  return localDateStr(d);
+}
+function fmtTime(v){
+  if (!v) return '';
+  if (typeof v === 'string' && /^\d{2}:\d{2}(:\d{2})?$/.test(v)) return v;
+  var d = new Date(v); if (isNaN(d)) return String(v);
+  return pad2_(d.getHours())+':'+pad2_(d.getMinutes())+':'+pad2_(d.getSeconds());
+}
+function normCase_(c){ c.CreatedDate = fmtDate(c.CreatedDate); c.CreatedTime = fmtTime(c.CreatedTime); return c; }
+function normReminder_(r){ r.ReminderDate = fmtDate(r.ReminderDate); r.DueDate = fmtDate(r.DueDate); return r; }
 function digitsOnly(el, maxLen){
   var cleaned = el.value.replace(/[^0-9]/g, '').slice(0, maxLen);
   if (cleaned !== el.value) el.value = cleaned;
@@ -618,8 +645,8 @@ function toggleSidebar(open){
 function loadMetaAndData(){
   Promise.all([ api('getMeta'), api('listCases'), api('listReminders') ]).then(function(res){
     STATE.meta = res[0];
-    STATE.cases = res[1].cases;
-    STATE.reminders = res[2].reminders;
+    STATE.cases = res[1].cases.map(normCase_);
+    STATE.reminders = res[2].reminders.map(normReminder_);
     STATE.metaLoaded = true;
     refreshActiveView();
   }).catch(function(err){ toast('تعذّر تحميل البيانات: ' + err.message, 'err'); });
@@ -629,8 +656,8 @@ function loadMetaAndData(){
 function refreshActiveView(){
   showView(STATE.currentView || 'dashboard');
 }
-function refreshCases(){ return api('listCases').then(function(res){ STATE.cases = res.cases; }); }
-function refreshReminders(){ return api('listReminders').then(function(res){ STATE.reminders = res.reminders; }); }
+function refreshCases(){ return api('listCases').then(function(res){ STATE.cases = res.cases.map(normCase_); }); }
+function refreshReminders(){ return api('listReminders').then(function(res){ STATE.reminders = res.reminders.map(normReminder_); }); }
 function refreshMetaOnly(){ return api('getMeta').then(function(res){ STATE.meta = res; STATE.metaLoaded = true; }); }
 
 /* ==========================================================================
@@ -639,7 +666,7 @@ function refreshMetaOnly(){ return api('getMeta').then(function(res){ STATE.meta
 function renderDashboard(){
   var cases = STATE.cases || [];
   var open = cases.filter(function(c){ return c.Status !== 'مغلقة'; }).length;
-  var todayStr = new Date().toISOString().slice(0,10);
+  var todayStr = localDateStr();
   var createdToday = cases.filter(function(c){ return c.CreatedDate === todayStr; }).length;
   var rem = STATE.reminders || [];
   var overdueCount = rem.filter(isOverdue).length;
@@ -650,6 +677,23 @@ function renderDashboard(){
     statCard(overdueCount, 'تذكيرات متأخرة');
   var recent = cases.slice(0, 8);
   $('dashRecentTable').innerHTML = casesTableHtml(recent, false);
+  renderDashSearch();
+}
+function renderDashSearch(){
+  var q = ($('dashSearch').value || '').trim().toLowerCase();
+  var wrap = $('dashSearchWrap'), hint = $('dashSearchHint');
+  if (!q){ wrap.style.display = 'none'; hint.textContent = 'ابحث بـ User Name أو باسم المشترك وستظهر الحالات المسجّلة له.'; return; }
+  var found = (STATE.cases||[]).filter(function(c){
+    return String(userNameOf(c)).toLowerCase().indexOf(q) > -1 || String(c.SubscriberName||'').toLowerCase().indexOf(q) > -1;
+  });
+  wrap.style.display = 'block';
+  if (!found.length){
+    hint.textContent = 'لا توجد أي حالة مسجّلة بهذا الاسم.';
+    $('dashSearchTable').innerHTML = '<tr><td class="empty-state">لا توجد حالة مطابقة 🔎</td></tr>';
+    return;
+  }
+  hint.textContent = 'تم العثور على ' + found.length + ' حالة' + (found.length > 20 ? ' (عرض أول 20)' : '') + '.';
+  $('dashSearchTable').innerHTML = casesTableHtml(found.slice(0, 20), true);
 }
 function statCard(n, l){ return '<div class="stat-card accent"><div class="n">'+n+'</div><div class="l">'+l+'</div></div>'; }
 
@@ -716,7 +760,7 @@ function submitNewCase(){
     var now = new Date();
     var localRecord = Object.assign({
       CaseID: res.caseId,
-      CreatedDate: now.toISOString().slice(0,10),
+      CreatedDate: localDateStr(now),
       CreatedTime: now.toTimeString().slice(0,8),
       CreatedBy: STATE.username,
       CreatedByName: STATE.fullName,
@@ -830,7 +874,7 @@ function exportCasesCsv(){
   var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
   var a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = 'Cases_' + new Date().toISOString().slice(0,10) + '.csv';
+  a.download = 'Cases_' + localDateStr() + '.csv';
   a.click();
 }
 
@@ -848,8 +892,7 @@ function isOverdue(r){
 }
 function isToday(r){
   var d = parseDate(r.ReminderDate); if (!d) return false;
-  var today = new Date().toISOString().slice(0,10);
-  return (r.ReminderDate||'').slice(0,10) === today;
+  return (r.ReminderDate||'').slice(0,10) === localDateStr();
 }
 function isUpcoming(r){
   if (isDoneReminder(r) || isOverdue(r) || isToday(r)) return false;
@@ -877,7 +920,7 @@ function renderReminders(){
   }).join('');
   $('remindersList').innerHTML = addBtn + html;
 }
-function openAddReminder(){ $('remCaseId').value=''; $('remType').value=''; $('remDate').value=new Date().toISOString().slice(0,10); $('remDue').value=''; $('remNote').value=''; openModal('addReminderModal'); }
+function openAddReminder(){ $('remCaseId').value=''; $('remType').value=''; $('remDate').value=localDateStr(); $('remDue').value=''; $('remNote').value=''; openModal('addReminderModal'); }
 function submitReminder(){
   var caseId = $('remCaseId').value.trim();
   if (!caseId){ toast('الرجاء إدخال رقم الحالة', 'err'); return; }
@@ -1128,7 +1171,7 @@ function generatePdfReport(){
         pdf.addImage(imgData, 'PNG', 0, position, imgWmm, imgHmm);
         heightLeftMm -= pageHmm;
       }
-      pdf.save('BackOffice_Report_' + new Date().toISOString().slice(0,10) + '.pdf');
+      pdf.save('BackOffice_Report_' + localDateStr() + '.pdf');
       toast('تم توليد التقرير بنجاح', 'ok');
     });
   }).catch(function(err){ toast(err.message, 'err'); })
