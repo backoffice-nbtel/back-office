@@ -2,7 +2,7 @@
   "name": "National Bird Telecom — Back Office",
   "short_name": "Back Office",
   "description": "نظام إدارة حالات Back Office",
-  "start_url": "./Cases.html",
+  "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
