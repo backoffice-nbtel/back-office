@@ -459,6 +459,8 @@ var STATE = {
    أدوات مساعدة عامة
    ========================================================================== */
 function $(id){ return document.getElementById(id); }
+// يقرأ حقل User Name حتى لو كان اسم العمود في الشيت OLT أو User Name
+function userNameOf(c){ return c.OLT || c['User Name'] || c.UserName || c.Username_ || ''; }
 function digitsOnly(el, maxLen){
   var cleaned = el.value.replace(/[^0-9]/g, '').slice(0, maxLen);
   if (cleaned !== el.value) el.value = cleaned;
@@ -721,7 +723,7 @@ function casesTableHtml(list, withActions){
       '<td><b>'+esc(c.CaseID)+'</b></td>'+
       '<td>'+esc(c.CreatedDate)+'</td>'+
       '<td>'+esc(c.SubscriberName||'—')+'</td>'+
-      '<td>'+esc(c.OLT||'—')+'</td>'+
+      '<td>'+esc(userNameOf(c)||'—')+'</td>'+
       '<td>'+esc(c.ProblemType)+'</td>'+
       '<td><span class="badge '+priorityBadgeClass(c.Priority)+'">'+esc(c.Priority)+'</span></td>'+
       '<td><span class="badge '+statusBadgeClass(c.Status)+'">'+esc(c.Status)+'</span></td>'+
@@ -787,7 +789,7 @@ function exportCasesCsv(){
   var cols = ['CaseID','CreatedDate','CreatedTime','CreatedByName','Category','ProblemType','Priority','Status','SubscriberName','Phone','ContractID','OLT','FDT','FAT','Port','Description','ActionTaken','Notes'];
   var lines = [cols.join(',')];
   (STATE.cases||[]).forEach(function(c){
-    lines.push(cols.map(function(k){ return '"' + String(c[k]===undefined?'':c[k]).replace(/"/g,'""') + '"'; }).join(','));
+    lines.push(cols.map(function(k){ return '"' + String(k==='OLT'?userNameOf(c):(c[k]===undefined?'':c[k])).replace(/"/g,'""') + '"'; }).join(','));
   });
   var csv = '\uFEFF' + lines.join('\n');
   var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
