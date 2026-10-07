@@ -17,7 +17,21 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="preconnect" href="https://script.google.com">
 <link rel="preconnect" href="https://script.googleusercontent.com">
-<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
+<script>
+(function(){
+  var l = 'ar';
+  try { l = localStorage.getItem('bo_lang') === 'en' ? 'en' : 'ar'; } catch(e){}
+  var d = document.documentElement; d.lang = l; d.dir = (l === 'en') ? 'ltr' : 'rtl';
+})();
+// خط Cairo للعربية فقط، ويُحمَّل بدون تعطيل عرض الصفحة. الإنكليزية تستخدم خطوط النظام (أسرع)
+function ensureCairo_(){
+  if (document.getElementById('cairoFont')) return;
+  var k = document.createElement('link'); k.id = 'cairoFont'; k.rel = 'stylesheet';
+  k.href = 'https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap';
+  document.head.appendChild(k);
+}
+if (document.documentElement.lang !== 'en') ensureCairo_();
+</script>
 <style>
   :root{
     --primary:#F2670D; --primary-dark:#D9560A; --primary-light:#FDE3CF; --primary-soft:#FFF3EA;
@@ -39,6 +53,8 @@
     -webkit-font-smoothing:antialiased; -webkit-tap-highlight-color:transparent;
   }
   button,input,select,textarea{font-family:inherit; font-size:inherit;}
+  html[lang="en"] body{font-family:'Inter','Segoe UI',system-ui,-apple-system,Roboto,'Helvetica Neue',Arial,sans-serif;}
+  html[lang="en"] .view-header h2, html[lang="en"] .card h3{letter-spacing:-.1px;}
   ::selection{background:var(--primary-light);}
   ::placeholder{color:var(--muted); opacity:.8;}
 
@@ -102,6 +118,11 @@
   #topLoader.show{display:block;}
   #topLoader::after{content:''; position:absolute; top:0; bottom:0; width:40%; background:var(--grad); border-radius:3px; animation:topLoaderMove 1s ease-in-out infinite;}
   @keyframes topLoaderMove{0%{right:-40%;} 100%{right:100%;}}
+  @keyframes topLoaderMoveL{0%{left:-40%;} 100%{left:100%;}}
+  html[dir="ltr"] #topLoader::after{animation-name:topLoaderMoveL;}
+  .lang-select{width:100%; padding:9px 12px; border:1.5px solid var(--border); border-radius:10px; background:var(--input-bg); color:var(--text); font-weight:700; outline:none; cursor:pointer;}
+  .lang-select:focus{border-color:var(--primary);}
+  .sidebar-footer .lang-select{margin-bottom:8px;}
   #busyPill{
     position:fixed; top:14px; left:50%; z-index:125; display:flex; align-items:center; gap:10px;
     background:#fff; border:1px solid var(--border); border-radius:999px; padding:9px 18px 9px 16px;
@@ -177,7 +198,7 @@
   .card h3{margin:0 0 14px; font-size:16px; color:var(--heading); font-weight:800;}
 
   table{width:100%; border-collapse:collapse; font-size:13.5px;}
-  td[data-label="Case ID"], td[data-label="التاريخ"]{white-space:nowrap;}
+  td[data-label="Case ID"], td[data-label="التاريخ"], td[data-label="Date"]{white-space:nowrap;}
   td[data-label="Case ID"] b{color:var(--primary-dark);}
   th{text-align:start; color:var(--muted); font-weight:800; padding:10px 12px; border-bottom:2px solid var(--border); white-space:nowrap; font-size:12.5px; background:#FBF9F6;}
   th:first-child{border-start-start-radius:10px;} th:last-child{border-start-end-radius:10px;}
@@ -237,7 +258,7 @@
     .topbar{display:flex;}
     #appShell.on{display:block;}
     .sidebar{position:fixed; inset-inline-start:0; top:0; bottom:0; width:250px; z-index:30; transform:translateX(105%); transition:transform .2s; box-shadow:var(--shadow-lg);}
-    html[dir="rtl"] .sidebar.open{transform:translateX(0);}
+    html[dir="rtl"] .sidebar.open{transform:translateX(0);} html[dir="ltr"] .sidebar{transform:translateX(-105%);} html[dir="ltr"] .sidebar.open{transform:translateX(0);}
   }
   @media(max-width:900px){ .grid-4{grid-template-columns:repeat(2,1fr);} }
   @media(max-width:560px){ .grid-4,.grid-2{grid-template-columns:1fr;} }
@@ -290,6 +311,10 @@
     <div class="error-box" id="loginError"></div>
     <form id="loginForm" onsubmit="return doLogin(event)" autocomplete="on" novalidate>
       <div class="field">
+        <label for="langSelect">اللغة / Language</label>
+        <select id="langSelect" onchange="setLang(this.value)"><option value="ar">العربية</option><option value="en">English</option></select>
+      </div>
+      <div class="field">
         <label for="loginUsername">اسم المستخدم</label>
         <input type="text" id="loginUsername" name="username" autocomplete="username" placeholder="اسم المستخدم" autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="next">
       </div>
@@ -323,6 +348,7 @@
           <div class="u-role" id="sidebarRole">-</div>
         </div>
       </div>
+      <select class="lang-select" id="langSelectApp" onchange="setLang(this.value)" title="اللغة / Language"><option value="ar">العربية</option><option value="en">English</option></select>
       <div class="logout-link" onclick="doLogout()">تسجيل الخروج ⏻</div>
     </div>
   </aside>
@@ -371,13 +397,14 @@
         <div class="card">
           <h3>بيانات المشترك</h3>
           <div class="grid grid-2">
-            <div class="field"><label>User Name</label><input type="text" id="ncOLT"></div>
+            <div class="field"><label>User Name</label><input type="text" id="ncOLT" placeholder="MH01020304" autocomplete="off" autocapitalize="characters" spellcheck="false" oninput="onUserNameInput()"></div>
             <div class="field"><label>اسم المشترك</label><input type="text" id="ncSubscriberName"></div>
             <div class="field"><label>رقم الهاتف</label><input type="text" id="ncPhone" inputmode="numeric" maxlength="11" oninput="digitsOnly(this,11)"></div>
             <div class="field"><label>Contract ID</label><input type="text" id="ncContractID" inputmode="numeric" maxlength="7" oninput="digitsOnly(this,7)"></div>
             <div class="field"><label>FDT</label><input type="text" id="ncFDT" inputmode="numeric" maxlength="2" oninput="digitsOnly(this,2)"></div>
             <div class="field"><label>FAT</label><input type="text" id="ncFAT" inputmode="numeric" maxlength="2" oninput="digitsOnly(this,2)"></div>
             <div class="field"><label>Port</label><input type="text" id="ncPort" inputmode="numeric" maxlength="2" oninput="digitsOnly(this,2)"></div>
+            <div class="hint" style="grid-column:1/-1;">يتم ملء FDT و FAT و Port تلقائياً من User Name (مثال: MH01020304 ← FDT=02، FAT=03، Port=04)</div>
           </div>
         </div>
         <div class="card">
@@ -556,6 +583,185 @@ function saveSnapshotSoon_(){ clearTimeout(_snapTimer); _snapTimer = setTimeout(
 document.addEventListener('keydown', function(e){
   if (e.key === 'Escape') document.querySelectorAll('.modal-bg.show').forEach(function(m){ m.classList.remove('show'); });
 });
+
+var AR_EN = {
+ 'اللغة / Language':'اللغة / Language',
+ 'نظام إدارة حالات Back Office':'Back Office Case Management',
+ 'مرحباً بك 👋 سجّل الدخول للمتابعة':'Welcome 👋 Sign in to continue',
+ 'اسم المستخدم':'Username', 'كلمة المرور':'Password', 'تسجيل الدخول':'Sign in', 'إظهار كلمة المرور':'Show password',
+ 'تسجيل الخروج ⏻':'Sign out ⏻', 'مدير النظام':'System admin', 'موظف':'Employee',
+ 'لوحة التحكم':'Dashboard', 'نظرة عامة سريعة على الحالات والتذكيرات':'Quick overview of cases and reminders',
+ 'بحث سريع عن مشترك':'Quick subscriber search', '🔍 اكتب User Name أو اسم المشترك...':'🔍 Type a User Name or subscriber name...',
+ 'ابحث بـ User Name أو باسم المشترك وستظهر الحالات المسجّلة له.':'Search by User Name or subscriber name to see their registered cases.',
+ 'لا توجد أي حالة مسجّلة بهذا الاسم.':'No cases are registered under this name.',
+ 'لا توجد حالة مطابقة 🔎':'No matching cases 🔎',
+ 'أحدث الحالات':'Latest cases', 'إجمالي الحالات':'Total cases', 'حالات مفتوحة':'Open cases', 'حالات اليوم':"Today's cases",
+ 'تذكيرات متأخرة':'Overdue reminders', 'تذكيرات اليوم':"Today's reminders", 'تذكيرات قادمة':'Upcoming reminders', 'تذكيرات مكتملة':'Completed reminders', 'حالات مغلقة':'Closed cases',
+ 'حالة جديدة':'New case', 'الحالات':'Cases', 'التذكيرات':'Reminders', 'الحساب':'Account', 'التقارير':'Reports', 'لوحة الإدارة':'Admin panel', 'الإدارة':'Administration',
+ 'إنشاء حالة جديدة':'Create new case', 'الحقول المطلوبة فقط مؤشر عليها بـ *':'Only required fields are marked with *',
+ 'سيتم توليده تلقائياً بعد الحفظ':'Will be generated automatically after saving',
+ 'التاريخ':'Date', 'الوقت':'Time', 'الموظف':'Employee', 'تصنيف الحالة':'Case classification',
+ 'بيانات المشترك':'Subscriber details', 'اسم المشترك':'Subscriber name', 'المشترك':'Subscriber', 'رقم الهاتف':'Phone number',
+ 'يتم ملء FDT و FAT و Port تلقائياً من User Name (مثال: MH01020304 ← FDT=02، FAT=03، Port=04)':'FDT, FAT and Port are filled automatically from the User Name (e.g. MH01020304 → FDT=02, FAT=03, Port=04)',
+ 'التفاصيل':'Details', 'الوصف':'Description', 'الإجراء المتخذ':'Action taken', 'ملاحظات':'Notes', 'حفظ الحالة':'Save case',
+ 'اختر...':'Select...', 'جارٍ تحميل القوائم من الخادم...':'Loading lists from the server...',
+ 'جميع الحالات المسجلة في النظام':'All cases registered in the system', 'تصدير Excel/CSV ⬇':'Export Excel/CSV ⬇',
+ 'بحث برقم الحالة، اسم المشترك، الهاتف، User Name...':'Search by case number, subscriber, phone, User Name...',
+ 'كل الحالات (Status)':'All statuses', 'كل الأولويات':'All priorities',
+ 'لا توجد حالات لعرضها 📭':'No cases to display 📭', 'عرض المزيد ⬇':'Show more ⬇',
+ 'عرض {a} من {b} حالة':'Showing {a} of {b} cases', 'إجمالي {n} حالة':'Total: {n} cases',
+ 'تم العثور على {n} حالة':'Found {n} case(s)', '(عرض أول 20)':'(showing first 20)', 'فتح':'Open',
+ 'متابعة المهام والمواعيد المرتبطة بالحالات':'Follow up on tasks and appointments linked to cases',
+ 'اليوم':'Today', 'متأخرة':'Overdue', 'قادمة':'Upcoming', 'مكتملة':'Completed', 'تذكير':'Reminder',
+ 'لا توجد تذكيرات في هذا القسم':'No reminders in this section', 'تمّت ✓':'Done ✓', '➕ إضافة تذكير':'➕ Add reminder',
+ 'تاريخ:':'Date:', 'استحقاق:':'Due:',
+ 'بيانات حسابك وتغيير كلمة المرور':'Your account details and password change',
+ 'تغيير كلمة المرور':'Change password', 'كلمة المرور الحالية':'Current password', 'كلمة المرور الجديدة':'New password', 'تحديث كلمة المرور':'Update password',
+ 'تقرير PDF شامل عن الحالات والتذكيرات وأداء الموظفين — للمدير فقط':'Comprehensive PDF report on cases, reminders and employee performance — admin only',
+ 'تقرير النظام الشامل':'Comprehensive system report',
+ 'يتضمن: نظرة عامة على الأرقام، توزيع الحالات حسب Status/Priority/Category/Problem Type، أداء كل موظف، ملخص التذكيرات، وآخر عمليات سجل Audit Log.':'Includes: an overview of the numbers, case distribution by Status/Priority/Category/Problem Type, each employee\'s performance, a reminders summary, and the latest Audit Log entries.',
+ '📄 توليد وتنزيل تقرير PDF':'📄 Generate & download PDF report', 'جارِ تجهيز التقرير...':'Preparing the report...',
+ 'إدارة الموظفين والقوائم والسجل':'Manage employees, lists and the log', 'الموظفون':'Employees',
+ 'تعديل الحالة':'Edit case', 'تعديل الحالة {id}':'Edit case {id}', 'حفظ التعديلات':'Save changes', 'إلغاء':'Cancel',
+ 'Category: {c} • Problem Type: {p} • المشترك: {s} • الهاتف: {ph}':'Category: {c} • Problem Type: {p} • Subscriber: {s} • Phone: {ph}',
+ '➕ إضافة تذكير لهذه الحالة':'➕ Add a reminder for this case',
+ 'إضافة تذكير':'Add reminder', 'رقم الحالة':'Case number', 'نوع التذكير':'Reminder type', 'مثال: متابعة عرض 90 يوم':'e.g. Follow up on 90-day offer',
+ 'تاريخ التذكير':'Reminder date', 'تاريخ الاستحقاق (Due Date)':'Due Date', 'ملاحظة':'Note', 'حفظ التذكير':'Save reminder',
+ 'مفعّل':'Active', 'معطّل':'Disabled', 'تعطيل':'Disable', 'تفعيل':'Enable', 'إضافة':'Add',
+ 'إضافة موظف جديد':'Add new employee', 'الاسم الكامل':'Full name', 'الصلاحية':'Role', 'الاسم':'Name', 'الحالة':'Status', 'الترتيب':'Order',
+ 'العملية':'Action', 'المستخدم':'User',
+ 'إضافة عنصر جديد — Categories':'Add new item — Categories', 'إضافة عنصر جديد — Statuses':'Add new item — Statuses', 'إضافة عنصر جديد — Priorities':'Add new item — Priorities',
+ 'اسم Category':'Category name', 'اسم Status':'Status name', 'اسم Priority':'Priority name', 'إضافة Problem Type جديد':'Add new Problem Type',
+ 'Custom Fields (افصل بينها بفاصلة ,)':'Custom Fields (separate with commas)', 'مثال: الموقع القديم, الموقع الجديد':'e.g. Old location, New location',
+ 'لا توجد عناصر':'No items', 'لا توجد أنواع مشاكل':'No problem types', 'لا يوجد سجل بعد':'No log entries yet', 'لا يوجد موظفون':'No employees',
+ 'مغلقة':'Closed', 'قيد المعالجة':'In progress', 'بانتظار المشترك':'Waiting for subscriber', 'بانتظار قسم آخر':'Waiting for another department',
+ 'عالية':'High', 'متوسطة':'Medium', 'منخفضة':'Low', 'جديدة':'New', 'مفتوحة':'Open', 'قيد الانتظار':'Pending', 'غير محدد':'Unspecified',
+ 'جارِ التنفيذ...':'Working...', 'جارِ تسجيل الدخول...':'Signing in...', 'جارِ تحميل البيانات...':'Loading data...', 'جارِ تحديث القوائم...':'Updating lists...',
+ 'جارِ تحميل الحالات...':'Loading cases...', 'جارِ تحميل التذكيرات...':'Loading reminders...', 'جارِ حفظ الحالة...':'Saving case...', 'جارِ حفظ التعديلات...':'Saving changes...',
+ 'جارِ إضافة التذكير...':'Adding reminder...', 'جارِ تحديث التذكير...':'Updating reminder...', 'جارِ تحديث كلمة المرور...':'Updating password...',
+ 'جارِ تحميل الموظفين...':'Loading employees...', 'جارِ إضافة الموظف...':'Adding employee...', 'جارِ تحديث الحساب...':'Updating account...',
+ 'جارِ الحفظ...':'Saving...', 'جارِ التحديث...':'Updating...', 'جارِ تحميل السجل...':'Loading log...', 'جارِ تحميل البيانات من الخادم...':'Loading data from the server...',
+ 'الرجاء إدخال اسم المستخدم وكلمة المرور':'Please enter your username and password', 'الرجاء إدخال الاسم':'Please enter the name',
+ 'الرجاء إدخال رقم الحالة':'Please enter the case number', 'الرجاء اختيار Category و Problem Type':'Please select a Category and Problem Type',
+ 'الرجاء تعبئة الاسم و Category':'Please fill in the name and Category', 'الرجاء تعبئة الحقلين':'Please fill in both fields', 'الرجاء تعبئة جميع الحقول':'Please fill in all fields',
+ 'كلمة المرور الجديدة قصيرة جداً':'The new password is too short', 'هذا العنصر موجود مسبقاً':'This item already exists',
+ 'هذه الصفحة متاحة للمدير فقط':'This page is available to the admin only', 'هذه العملية تتطلب صلاحية Admin':'This action requires Admin permission',
+ 'انتهت مهلة الاتصال، حاول مرة أخرى':'Connection timed out, please try again', 'تعذّر الاتصال بالخادم، تحقق من الإنترنت ثم حاول مرة أخرى':'Could not reach the server, check your internet and try again',
+ 'حدث خطأ غير متوقع':'An unexpected error occurred', 'تعذّر تحميل مكتبة PDF، تأكد من الاتصال بالإنترنت':'Could not load the PDF library, check your internet connection',
+ 'تم إضافة التذكير':'Reminder added', 'تم تحديث حالة التذكير':'Reminder updated', 'تم تحديث كلمة المرور بنجاح':'Password updated successfully',
+ 'تم توليد التقرير بنجاح':'Report generated successfully', 'تم حفظ التعديلات':'Changes saved', 'تمت إضافة الموظف':'Employee added', 'تمت الإضافة':'Added successfully',
+ 'تم إنشاء الحالة برقم {id}':'Case created: {id}', 'تعذّر تحميل البيانات: {m}':'Could not load data: {m}', 'تعذّر الحفظ، تمت إعادة القيم السابقة: {m}':'Could not save, previous values restored: {m}',
+ 'لم يتم ضبط رابط Google Apps Script داخل الملف بعد (WEB_APP_URL).':'The Google Apps Script URL (WEB_APP_URL) has not been set in the file yet.',
+ 'تاريخ التوليد':'Generated on', 'بواسطة':'By', 'نظرة عامة':'Overview',
+ 'توزيع الحالات حسب Status':'Cases by Status', 'توزيع الحالات حسب Priority':'Cases by Priority', 'توزيع الحالات حسب Category':'Cases by Category', 'توزيع الحالات حسب Problem Type':'Cases by Problem Type',
+ 'أداء الموظفين (عدد الحالات المسجّلة لكل موظف)':'Employee performance (cases registered per employee)', 'العدد':'Count',
+ 'آخر العمليات في سجل Audit Log (حتى 25 عملية)':'Latest Audit Log entries (up to 25)', 'لا توجد بيانات':'No data',
+ 'تقرير النظام الشامل — Back Office':'Comprehensive System Report — Back Office',
+ 'تقرير سري — للاستخدام الإداري الداخلي فقط • National Bird Telecom Back Office':'Confidential report — for internal administrative use only • National Bird Telecom Back Office'
+};
+var DICT = {};
+function nk_(s){ return String(s).replace(/[\u064B-\u065F\u0670\u0640]/g, '').replace(/\s+/g, ' ').trim(); }
+Object.keys(AR_EN).forEach(function(k){ DICT[nk_(k)] = AR_EN[k]; });
+var LANG = 'ar';
+try { LANG = localStorage.getItem('bo_lang') === 'en' ? 'en' : 'ar'; } catch(e){}
+function loc_(){ return LANG === 'en' ? 'en-GB' : 'ar-EG-u-nu-latn'; }
+// ترجمة نص كامل مطابق (القيم غير الموجودة في القاموس تبقى كما هي، مثل أسماء المشتركين)
+function tx(str){
+  if (LANG !== 'en' || str === undefined || str === null) return str;
+  str = String(str);
+  var en = DICT[nk_(str)];
+  if (en === undefined) return str;
+  return str.match(/^\s*/)[0] + en + str.match(/\s*$/)[0];
+}
+// قالب نصي: TX('عرض {a} من {b}', {a:1, b:2})
+function TX(str, vars){
+  var o = tx(str);
+  if (vars) for (var k in vars) o = o.split('{' + k + '}').join(vars[k]);
+  return o;
+}
+var AR_RE = /[\u0600-\u06FF]/;
+var SKIP_TAGS = { SCRIPT:1, STYLE:1, TEXTAREA:1, INPUT:1 }; // لا نترجم أبداً ما يكتبه المستخدم
+var TR_ATTRS = ['placeholder', 'title', 'aria-label', 'data-label'];
+function trText_(n){
+  var p = n.parentNode; if (!p || SKIP_TAGS[p.nodeName]) return;
+  if (n.__ar === undefined){
+    if (LANG !== 'en' || !AR_RE.test(n.nodeValue)) return;
+    n.__ar = n.nodeValue;
+  }
+  var v = LANG === 'en' ? tx(n.__ar) : n.__ar;
+  if (n.nodeValue !== v) n.nodeValue = v;
+}
+function trAttrs_(el){
+  for (var i = 0; i < TR_ATTRS.length; i++){
+    var a = TR_ATTRS[i], v = el.getAttribute && el.getAttribute(a);
+    if (v === null || v === undefined) continue;
+    if (!el.__a) el.__a = {};
+    if (el.__a[a] === undefined){
+      if (LANG !== 'en' || !AR_RE.test(v)) continue;
+      el.__a[a] = v;
+    }
+    var nv = LANG === 'en' ? tx(el.__a[a]) : el.__a[a];
+    if (v !== nv) el.setAttribute(a, nv);
+  }
+}
+function trTree_(root){
+  if (!root) return;
+  if (root.nodeType === 3){ trText_(root); return; }
+  if (root.nodeType !== 1) return;
+  trAttrs_(root);
+  var w = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT, null), n;
+  while ((n = w.nextNode())){ if (n.nodeType === 3) trText_(n); else trAttrs_(n); }
+}
+var _obs = null;
+function startObs_(){
+  if (_obs || !window.MutationObserver) return;
+  _obs = new MutationObserver(function(muts){
+    for (var i = 0; i < muts.length; i++){
+      var add = muts[i].addedNodes;
+      for (var j = 0; j < add.length; j++) trTree_(add[j]);
+    }
+  });
+  _obs.observe(document.body, { childList:true, subtree:true });
+}
+function stopObs_(){ if (_obs){ _obs.disconnect(); _obs = null; } }
+function applyLang_(initial){
+  var de = document.documentElement;
+  de.lang = LANG; de.dir = LANG === 'en' ? 'ltr' : 'rtl';
+  ['langSelect', 'langSelectApp'].forEach(function(id){ var el = document.getElementById(id); if (el) el.value = LANG; });
+  if (LANG === 'en'){ trTree_(document.body); startObs_(); }
+  else { stopObs_(); if (!initial) trTree_(document.body); }
+}
+function setLang(l){
+  l = l === 'en' ? 'en' : 'ar';
+  if (l === LANG){ applyLang_(); return; }
+  LANG = l;
+  try { localStorage.setItem('bo_lang', l); } catch(e){}
+  if (l === 'ar') ensureCairo_();
+  applyLang_();
+  if (STATE.token && $('appShell').classList.contains('on')){
+    var v = STATE.currentView;
+    buildNav();
+    $('sidebarRole').textContent = STATE.role === 'admin' ? 'مدير النظام' : 'موظف';
+    showView(v);
+  }
+}
+function reportLang_(h){
+  if (LANG !== 'en') return h;
+  h = h.replace(/>([^<>]+)</g, function(m, txt){ return '>' + tx(txt) + '<'; });
+  h = h.replace(/text-align:right/g, '@@L@@').replace(/text-align:left/g, 'text-align:right').replace(/@@L@@/g, 'text-align:left').replace('dir="rtl"', 'dir="ltr"');
+  return h;
+}
+// ملء FDT / FAT / Port تلقائياً من User Name — مثال: MH01020304
+// (أول رقمين يُهملان، ثم FDT ثم FAT ثم Port، كل منها رقمان)
+function onUserNameInput(){
+  var m = String($('ncOLT').value || '').match(/^\D*(\d*)/);
+  var d = m ? m[1] : '';
+  [['ncFDT', 2], ['ncFAT', 4], ['ncPort', 6]].forEach(function(x){
+    var el = $(x[0]);
+    if (d.length >= x[1] + 2){ el.value = d.substr(x[1], 2); el.dataset.auto = '1'; }
+    else if (el.dataset.auto === '1'){ el.value = ''; delete el.dataset.auto; }
+  });
+}
 
 /* ==========================================================================
    الحالة العامة للتطبيق
@@ -788,7 +994,7 @@ function loadMetaAndData(){
     saveSnapshot_();
     
     if (!typingNewCase) refreshActiveView(); // لا نعيد رسم النموذج أثناء كتابة الموظف
-  }).catch(function(err){  toast('تعذّر تحميل البيانات: ' + err.message, 'err'); });
+  }).catch(function(err){  toast(TX('تعذّر تحميل البيانات: {m}', {m: tx(err.message)}), 'err'); });
 }
 // يعيد عرض القسم المفتوح حالياً — يُستدعى بعد وصول بيانات الخادم حتى لا تبقى القوائم فارغة
 // إذا فتح المستخدم قسماً قبل انتهاء التحميل
@@ -852,7 +1058,7 @@ function renderDashSearch(){
     $('dashSearchTable').innerHTML = '<tr><td class="empty-state">لا توجد حالة مطابقة 🔎</td></tr>';
     return;
   }
-  hint.textContent = 'تم العثور على ' + found.length + ' حالة' + (found.length > 20 ? ' (عرض أول 20)' : '') + '.';
+  hint.textContent = TX('تم العثور على {n} حالة', {n: found.length}) + (found.length > 20 ? tx(' (عرض أول 20)') : '') + '.';
   $('dashSearchTable').innerHTML = casesTableHtml(found.slice(0, 20), true);
 }
 var debouncedDashSearch = debounce_(function(){ renderDashSearch(); }, 160);
@@ -865,8 +1071,8 @@ function renderNewCaseForm(){
   var now = new Date();
   $('newCaseAutoFields').innerHTML =
     field('Case ID', 'سيتم توليده تلقائياً بعد الحفظ') +
-    field('التاريخ', now.toLocaleDateString('ar-EG-u-nu-latn')) +
-    field('الوقت', now.toLocaleTimeString('ar-EG-u-nu-latn')) +
+    field('التاريخ', now.toLocaleDateString(loc_())) +
+    field('الوقت', now.toLocaleTimeString(loc_())) +
     field('الموظف', STATE.fullName);
 
   if (!STATE.metaLoaded){
@@ -881,13 +1087,13 @@ function renderNewCaseForm(){
   $('ncSubmitBtn').disabled = false;
   var catSel = $('ncCategory');
   catSel.innerHTML = '<option value="">اختر...</option>' + STATE.meta.categories.map(function(c){ return '<option>'+esc(c)+'</option>'; }).join('');
-  $('ncPriority').innerHTML = STATE.meta.priorities.map(function(p){ return '<option>'+esc(p)+'</option>'; }).join('');
-  $('ncStatus').innerHTML = STATE.meta.statuses.map(function(s){ return '<option>'+esc(s)+'</option>'; }).join('');
+  $('ncPriority').innerHTML = STATE.meta.priorities.map(function(p){ return opt_(p); }).join('');
+  $('ncStatus').innerHTML = STATE.meta.statuses.map(function(s){ return opt_(s); }).join('');
   onCategoryChange();
   // تفريغ الحقول
-  ['ncSubscriberName','ncPhone','ncContractID','ncOLT','ncFDT','ncFAT','ncPort','ncDescription','ncActionTaken','ncNotes'].forEach(function(id){ $(id).value=''; });
+  ['ncSubscriberName','ncPhone','ncContractID','ncOLT','ncFDT','ncFAT','ncPort','ncDescription','ncActionTaken','ncNotes'].forEach(function(id){ $(id).value=''; delete $(id).dataset.auto; });
 }
-function field(label, value){ return '<div class="field"><label>'+label+'</label><input type="text" value="'+esc(value)+'" disabled></div>'; }
+function field(label, value){ return '<div class="field"><label>'+label+'</label><input type="text" value="'+esc(tx(value))+'" disabled></div>'; }
 function onCategoryChange(){
   var cat = $('ncCategory').value;
   var types = STATE.meta.problemTypes.filter(function(p){ return !cat || p.Category === cat; });
@@ -917,7 +1123,7 @@ function submitNewCase(){
   };
   var btn = $('ncSubmitBtn'); setBtnLoading_(btn, true, 'جارِ الحفظ...');
   api('createCase', { caseData: caseData }).then(function(res){
-    toast('تم إنشاء الحالة برقم ' + res.caseId, 'ok');
+    toast(TX('تم إنشاء الحالة برقم {id}', {id: res.caseId}), 'ok');
     var now = new Date();
     var localRecord = Object.assign({
       CaseID: res.caseId,
@@ -940,10 +1146,11 @@ function submitNewCase(){
 /* ==========================================================================
    الحالات
    ========================================================================== */
+function opt_(v, sel){ return '<option value="'+esc(v)+'"'+(sel?' selected':'')+'>'+esc(v)+'</option>'; }
 function ensureCaseFilters(){
   var sSel = $('casesFilterStatus'), pSel = $('casesFilterPriority');
-  if (sSel.options.length <= 1){ STATE.meta.statuses.forEach(function(s){ sSel.innerHTML += '<option>'+esc(s)+'</option>'; }); }
-  if (pSel.options.length <= 1){ STATE.meta.priorities.forEach(function(p){ pSel.innerHTML += '<option>'+esc(p)+'</option>'; }); }
+  if (sSel.options.length <= 1) sSel.insertAdjacentHTML('beforeend', STATE.meta.statuses.map(function(v){ return opt_(v); }).join(''));
+  if (pSel.options.length <= 1) pSel.insertAdjacentHTML('beforeend', STATE.meta.priorities.map(function(v){ return opt_(v); }).join(''));
 }
 function statusBadgeClass(status){
   if (status === 'مغلقة') return 'badge-success';
@@ -990,9 +1197,9 @@ function renderCasesTable(keep){
   $('casesTable').innerHTML = casesTableHtml(list.slice(0, lim), true);
   var more = $('casesMore');
   if (list.length > lim){
-    more.innerHTML = '<div class="hint">عرض ' + lim + ' من ' + list.length + ' حالة</div><button class="btn btn-outline btn-sm" onclick="showMoreCases()">عرض المزيد ⬇</button>';
+    more.innerHTML = '<div class="hint">' + TX('عرض {a} من {b} حالة', {a: lim, b: list.length}) + '</div><button class="btn btn-outline btn-sm" onclick="showMoreCases()">عرض المزيد ⬇</button>';
   } else {
-    more.innerHTML = list.length ? '<div class="hint">إجمالي ' + list.length + ' حالة</div>' : '';
+    more.innerHTML = list.length ? '<div class="hint">' + TX('إجمالي {n} حالة', {n: list.length}) + '</div>' : '';
   }
 }
 function showMoreCases(){ STATE.casesLimit = (STATE.casesLimit || CASES_PAGE) + CASES_PAGE; renderCasesTable(true); }
@@ -1000,9 +1207,9 @@ var debouncedCases = debounce_(function(){ renderCasesTable(); }, 180);
 function openEditCase(caseId){
   var c = STATE.cases.filter(function(x){ return x.CaseID === caseId; })[0];
   if (!c) return;
-  $('editCaseTitle').textContent = 'تعديل الحالة ' + c.CaseID;
-  var statusOpts = STATE.meta.statuses.map(function(s){ return '<option '+(s===c.Status?'selected':'')+'>'+esc(s)+'</option>'; }).join('');
-  var prioOpts = STATE.meta.priorities.map(function(p){ return '<option '+(p===c.Priority?'selected':'')+'>'+esc(p)+'</option>'; }).join('');
+  $('editCaseTitle').textContent = TX('تعديل الحالة {id}', {id: c.CaseID});
+  var statusOpts = STATE.meta.statuses.map(function(s){ return opt_(s, s===c.Status); }).join('');
+  var prioOpts = STATE.meta.priorities.map(function(p){ return opt_(p, p===c.Priority); }).join('');
   $('editCaseBody').innerHTML =
     '<div class="grid grid-2">'+
       '<div class="field"><label>Status</label><select id="ecStatus">'+statusOpts+'</select></div>'+
@@ -1010,7 +1217,7 @@ function openEditCase(caseId){
     '</div>'+
     '<div class="field"><label>الإجراء المتخذ</label><textarea id="ecActionTaken" rows="2">'+esc(c.ActionTaken)+'</textarea></div>'+
     '<div class="field"><label>ملاحظات</label><textarea id="ecNotes" rows="2">'+esc(c.Notes)+'</textarea></div>'+
-    '<div class="hint">Category: '+esc(c.Category)+' • Problem Type: '+esc(c.ProblemType)+' • المشترك: '+esc(c.SubscriberName||'—')+' • الهاتف: '+esc(c.Phone||'—')+'</div>'+
+    '<div class="hint">'+TX('Category: {c} • Problem Type: {p} • المشترك: {s} • الهاتف: {ph}', {c:esc(c.Category), p:esc(c.ProblemType), s:esc(c.SubscriberName||'—'), ph:esc(c.Phone||'—')})+'</div>'+
     '<button class="btn btn-outline btn-sm" style="margin-top:14px;" onclick="prefillReminderFor(\''+esc(c.CaseID)+'\')">➕ إضافة تذكير لهذه الحالة</button>';
   $('editCaseBody').dataset.caseId = caseId;
   openModal('editCaseModal');
@@ -1031,7 +1238,7 @@ function saveEditCase(){
     var i = STATE.cases.findIndex(function(c){ return c.CaseID === caseId; });
     if (i > -1) STATE.cases[i] = prev;
     rerender_();
-    toast('تعذّر الحفظ، تمت إعادة القيم السابقة: ' + err.message, 'err');
+    toast(TX('تعذّر الحفظ، تمت إعادة القيم السابقة: {m}', {m: tx(err.message)}), 'err');
   });
 }
 function prefillReminderFor(caseId){
@@ -1089,7 +1296,7 @@ function renderReminders(){
   if (!list.length){ $('remindersList').innerHTML = addBtn + '<div class="card empty-state"><div class="ic">⏰</div>لا توجد تذكيرات في هذا القسم</div>'; return; }
   var html = list.map(function(r){
     return '<div class="reminder-item">'+
-      '<div><div class="rt">'+esc(r.CaseID)+' — '+esc(r.ReminderType||'تذكير')+'</div><div class="rc">تاريخ: '+esc(r.ReminderDate)+(r.DueDate?' • استحقاق: '+esc(r.DueDate):'')+(r.Note?' • '+esc(r.Note):'')+'</div></div>'+
+      '<div><div class="rt">'+esc(r.CaseID)+' — '+esc(r.ReminderType||tx('تذكير'))+'</div><div class="rc">'+tx('تاريخ: ')+esc(r.ReminderDate)+(r.DueDate?' • '+tx('استحقاق: ')+esc(r.DueDate):'')+(r.Note?' • '+esc(r.Note):'')+'</div></div>'+
       (isDoneReminder(r) ? '<span class="badge badge-success">مكتملة</span>' : '<button class="btn btn-outline btn-sm" onclick="markReminderDone(\''+esc(r.ReminderID)+'\')">تمّت ✓</button>')+
     '</div>';
   }).join('');
@@ -1269,7 +1476,7 @@ function renderAdminProblemTypes(){
       '<button class="btn btn-primary btn-sm" onclick="adminAddProblemType()">إضافة</button></div>'+
     '<div class="card"><div class="table-wrap"><table id="ptTable"></table></div></div>';
   var rows = STATE.meta.problemTypes.map(function(p){
-    return '<tr><td>'+esc(p.Name)+'</td><td>'+esc(p.Category)+'</td><td>'+esc((p.CustomFields||[]).join('، ')||'—')+'</td>'+
+    return '<tr><td>'+esc(p.Name)+'</td><td>'+esc(p.Category)+'</td><td>'+esc((p.CustomFields||[]).join(LANG==='en'?', ':'، ')||'—')+'</td>'+
       '<td><button class="btn btn-outline btn-sm" onclick="adminToggleLookup(\'ProblemTypes\',\''+esc(p.Name)+'\')">تعطيل</button></td></tr>';
   }).join('');
   $('ptTable').innerHTML = '<tr><th>الاسم</th><th>Category</th><th>Custom Fields</th><th></th></tr>' + (rows || '<tr><td class="empty-state">لا توجد أنواع مشاكل</td></tr>');
@@ -1291,7 +1498,7 @@ function renderAdminAudit(){
   $('adminContent').innerHTML = '<div class="card"><div class="table-wrap"><table id="auditTable"><tr><td class="empty-state"><span class="spin"></span><div>جارِ تحميل السجل...</div></td></tr></table></div></div>';
   api('adminGetAuditLog').then(function(res){
     var rows = res.log.map(function(l){
-      return '<tr><td>'+esc(new Date(l.Timestamp).toLocaleString('ar-EG-u-nu-latn'))+'</td><td>'+esc(l.Username)+'</td><td>'+esc(l.ActionType)+'</td><td>'+esc(l.CaseID||'—')+'</td></tr>';
+      return '<tr><td>'+esc(new Date(l.Timestamp).toLocaleString(loc_()))+'</td><td>'+esc(l.Username)+'</td><td>'+esc(l.ActionType)+'</td><td>'+esc(l.CaseID||'—')+'</td></tr>';
     }).join('');
     $('auditTable').innerHTML = '<tr><th>الوقت</th><th>المستخدم</th><th>العملية</th><th>Case ID</th></tr>' + (rows || '<tr><td class="empty-state">لا يوجد سجل بعد</td></tr>');
   }).catch(function(err){ toast(err.message, 'err'); });
@@ -1325,12 +1532,12 @@ function buildReportHtml_(auditRows){
   var remUpcoming = reminders.filter(isUpcoming).length;
   var remDone = reminders.filter(isDoneReminder).length;
   var now = new Date();
-  var stamp = now.toLocaleDateString('ar-EG-u-nu-latn') + ' — ' + now.toLocaleTimeString('ar-EG-u-nu-latn');
+  var stamp = now.toLocaleDateString(loc_()) + ' — ' + now.toLocaleTimeString(loc_());
 
   var s = '<div dir="rtl" style="font-family:Cairo,Tahoma,Arial,sans-serif; color:#201F1C; background:#fff; width:760px; padding:28px;">';
   s += '<div style="display:flex; align-items:center; justify-content:space-between; border-bottom:3px solid #F2670D; padding-bottom:14px; margin-bottom:22px;">';
   s += '<div><div style="font-size:20px; font-weight:800;">تقرير النظام الشامل — Back Office</div><div style="font-size:12px; color:#8A857C; margin-top:4px;">National Bird Telecom</div></div>';
-  s += '<div style="text-align:left; font-size:12px; color:#8A857C;">تاريخ التوليد<br><b style="color:#201F1C; font-size:13px;">'+esc(stamp)+'</b><br>بواسطة: '+esc(STATE.fullName)+'</div>';
+  s += '<div style="text-align:left; font-size:12px; color:#8A857C;">تاريخ التوليد<br><b style="color:#201F1C; font-size:13px;">'+esc(stamp)+'</b><br>'+tx('بواسطة')+': '+esc(STATE.fullName)+'</div>';
   s += '</div>';
 
   function sectionTitle(t){ return '<div style="font-size:15px; font-weight:800; margin:22px 0 10px; padding-bottom:6px; border-bottom:1px solid #E7E2DA;">'+t+'</div>'; }
@@ -1358,13 +1565,13 @@ function buildReportHtml_(auditRows){
   s += '<table style="width:100%; border-collapse:collapse; font-size:11.5px;">'+
     '<tr><th style="text-align:right; padding:6px 8px; border-bottom:2px solid #E7E2DA; color:#8A857C;">الوقت</th><th style="text-align:right; padding:6px 8px; border-bottom:2px solid #E7E2DA; color:#8A857C;">المستخدم</th><th style="text-align:right; padding:6px 8px; border-bottom:2px solid #E7E2DA; color:#8A857C;">العملية</th><th style="text-align:right; padding:6px 8px; border-bottom:2px solid #E7E2DA; color:#8A857C;">Case ID</th></tr>'+
     auditRows.slice(0,25).map(function(l){
-      return '<tr><td style="padding:5px 8px; border-bottom:1px solid #F1EEE8;">'+esc(new Date(l.Timestamp).toLocaleString('ar-EG-u-nu-latn'))+'</td><td style="padding:5px 8px; border-bottom:1px solid #F1EEE8;">'+esc(l.Username)+'</td><td style="padding:5px 8px; border-bottom:1px solid #F1EEE8;">'+esc(l.ActionType)+'</td><td style="padding:5px 8px; border-bottom:1px solid #F1EEE8;">'+esc(l.CaseID||'—')+'</td></tr>';
+      return '<tr><td style="padding:5px 8px; border-bottom:1px solid #F1EEE8;">'+esc(new Date(l.Timestamp).toLocaleString(loc_()))+'</td><td style="padding:5px 8px; border-bottom:1px solid #F1EEE8;">'+esc(l.Username)+'</td><td style="padding:5px 8px; border-bottom:1px solid #F1EEE8;">'+esc(l.ActionType)+'</td><td style="padding:5px 8px; border-bottom:1px solid #F1EEE8;">'+esc(l.CaseID||'—')+'</td></tr>';
     }).join('') +
   '</table>';
 
   s += '<div style="margin-top:24px; font-size:10.5px; color:#8A857C; text-align:center;">تقرير سري — للاستخدام الإداري الداخلي فقط • National Bird Telecom Back Office</div>';
   s += '</div>';
-  return s;
+  return reportLang_(s);
 }
 var _libPromises = {};
 function loadScript_(url){
@@ -1416,6 +1623,10 @@ function generatePdfReport(){
   }).catch(function(err){ toast(err.message, 'err'); })
   .finally(function(){ btn.disabled=false; btn.textContent='📄 توليد وتنزيل تقرير PDF'; });
 }
+['ncFDT','ncFAT','ncPort'].forEach(function(id){
+  var el = $(id); if (el) el.addEventListener('input', function(){ delete el.dataset.auto; });
+});
+applyLang_(true);
 if (STATE.token){ enterApp(); }
 else {
   // إيقاظ خادم Google Apps Script مسبقاً أثناء كتابة المستخدم لبياناته (يقلل تأخر أول طلب)
