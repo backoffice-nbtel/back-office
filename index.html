@@ -188,6 +188,14 @@ if (document.documentElement.lang !== 'en') ensureCairo_();
   .grid-2{grid-template-columns:repeat(2,1fr);}
 
   .stat-card{display:flex; align-items:center; gap:14px; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:18px; box-shadow:var(--shadow);}
+  .stat-card.clickable{cursor:pointer; transition:transform .12s, box-shadow .15s, border-color .15s;}
+  .stat-card.clickable:hover{transform:translateY(-2px); border-color:var(--primary); box-shadow:0 10px 26px rgba(242,103,13,.16);}
+  .stat-card.clickable:active{transform:translateY(0);}
+  .stat-card.clickable:focus-visible{outline:3px solid rgba(242,103,13,.35); outline-offset:2px;}
+  .chip-bar{margin-bottom:12px;}
+  .chip{display:inline-flex; align-items:center; gap:6px; background:var(--primary-soft); color:var(--primary-dark); border:1px solid var(--primary-light); border-radius:999px; padding:6px 8px 6px 14px; font-size:13px; font-weight:700;}
+  .chip button{background:#fff; border:none; width:22px; height:22px; border-radius:50%; cursor:pointer; color:var(--primary-dark); font-size:11px; line-height:1;}
+  .chip button:hover{background:var(--danger-bg); color:var(--danger);}
   .stat-ic{width:48px; height:48px; border-radius:14px; display:flex; align-items:center; justify-content:center; font-size:23px; flex-shrink:0;}
   .stat-ic.t-orange{background:var(--primary-soft);} .stat-ic.t-blue{background:var(--info-bg);}
   .stat-ic.t-green{background:var(--success-bg);} .stat-ic.t-red{background:var(--danger-bg);}
@@ -422,6 +430,7 @@ if (document.documentElement.lang !== 'en') ensureCairo_();
           <div><h2>الحالات</h2><p>جميع الحالات المسجلة في النظام</p></div>
           <button class="btn btn-outline btn-sm" onclick="exportCasesCsv()">تصدير Excel/CSV ⬇</button>
         </div>
+        <div id="casesQuickBar"></div>
         <div class="toolbar">
           <input type="text" id="casesSearch" placeholder="بحث برقم الحالة، اسم المشترك، الهاتف، User Name..." oninput="debouncedCases()">
           <select id="casesFilterStatus" onchange="renderCasesTable()"><option value="">كل الحالات (Status)</option></select>
@@ -585,7 +594,7 @@ document.addEventListener('keydown', function(e){
 });
 
 var AR_EN = {
- 'اللغة / Language':'اللغة / Language',
+ 'اللغة / Language':'اللغة / Language', 'تصفية:':'Filter:', 'إلغاء التصفية':'Clear filter',
  'نظام إدارة حالات Back Office':'Back Office Case Management',
  'مرحباً بك 👋 سجّل الدخول للمتابعة':'Welcome 👋 Sign in to continue',
  'اسم المستخدم':'Username', 'كلمة المرور':'Password', 'تسجيل الدخول':'Sign in', 'إظهار كلمة المرور':'Show password',
@@ -931,12 +940,12 @@ var NAV_ITEMS = [
 function buildNav(){
   var html = '';
   NAV_ITEMS.forEach(function(n){
-    html += '<div class="nav-item" data-v="'+n.id+'" onclick="showView(\''+n.id+'\')"><span class="ic">'+n.ic+'</span>'+n.label+'</div>';
+    html += '<div class="nav-item" data-v="'+n.id+'" onclick="navTo(\''+n.id+'\')"><span class="ic">'+n.ic+'</span>'+n.label+'</div>';
   });
   if (STATE.role === 'admin'){
     html += '<div class="nav-sep"></div><div class="nav-group-title">الإدارة</div>';
-    html += '<div class="nav-item" data-v="reports" onclick="showView(\'reports\')"><span class="ic">📄</span>التقارير</div>';
-    html += '<div class="nav-item" data-v="admin" onclick="showView(\'admin\')"><span class="ic">🛠️</span>لوحة الإدارة</div>';
+    html += '<div class="nav-item" data-v="reports" onclick="navTo(\'reports\')"><span class="ic">📄</span>التقارير</div>';
+    html += '<div class="nav-item" data-v="admin" onclick="navTo(\'admin\')"><span class="ic">🛠️</span>لوحة الإدارة</div>';
   }
   $('navItems').innerHTML = html;
   showView('dashboard');
@@ -1040,10 +1049,10 @@ function renderDashboard(){
   }
   var overdueCount = (STATE.reminders || []).filter(isOverdue).length;
   $('dashStats').innerHTML =
-    statCard(cases.length, 'إجمالي الحالات', '📋', 'orange') +
-    statCard(open, 'حالات مفتوحة', '📂', 'blue') +
-    statCard(createdToday, 'حالات اليوم', '🆕', 'green') +
-    statCard(overdueCount, 'تذكيرات متأخرة', '⏰', 'red');
+    statCard(cases.length, 'إجمالي الحالات', '📋', 'orange', "goCases(null)") +
+    statCard(open, 'حالات مفتوحة', '📂', 'blue', "goCases('open')") +
+    statCard(createdToday, 'حالات اليوم', '🆕', 'green', "goCases('today')") +
+    statCard(overdueCount, 'تذكيرات متأخرة', '⏰', 'red', "goReminders('overdue')");
   $('dashRecentTable').innerHTML = casesTableHtml(cases.slice(0, 8), false);
   renderDashSearch();
 }
@@ -1062,7 +1071,10 @@ function renderDashSearch(){
   $('dashSearchTable').innerHTML = casesTableHtml(found.slice(0, 20), true);
 }
 var debouncedDashSearch = debounce_(function(){ renderDashSearch(); }, 160);
-function statCard(n, l, ic, tone){ return '<div class="stat-card"><div class="stat-ic t-'+(tone||'orange')+'">'+(ic||'📊')+'</div><div><div class="n">'+n+'</div><div class="l">'+l+'</div></div></div>'; }
+function statCard(n, l, ic, tone, act){
+  var attrs = act ? ' class="stat-card clickable" role="button" tabindex="0" onclick="' + act + '" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();' + act + '}"' : ' class="stat-card"';
+  return '<div' + attrs + '><div class="stat-ic t-'+(tone||'orange')+'">'+(ic||'📊')+'</div><div><div class="n">'+n+'</div><div class="l">'+l+'</div></div></div>';
+}
 
 /* ==========================================================================
    حالة جديدة
@@ -1182,14 +1194,32 @@ function casesTableHtml(list, withActions){
   return head + rows;
 }
 var CASES_PAGE = 50;
+var QUICK_LABELS = { open: 'حالات مفتوحة', today: 'حالات اليوم' };
+function renderQuickBar_(){
+  var el = $('casesQuickBar'); if (!el) return;
+  var k = STATE.casesQuick;
+  el.innerHTML = k ? '<div class="chip-bar"><span class="chip"><span>تصفية:</span> <b>' + QUICK_LABELS[k] + '</b><button type="button" onclick="clearQuick()" title="إلغاء التصفية">✕</button></span></div>' : '';
+}
+function goCases(kind){
+  STATE.casesQuick = kind || null;
+  ['casesSearch', 'casesFilterStatus', 'casesFilterPriority'].forEach(function(id){ var e = $(id); if (e) e.value = ''; });
+  STATE._keepQuick = true; showView('cases'); STATE._keepQuick = false;
+}
+function clearQuick(){ STATE.casesQuick = null; renderCasesTable(); }
+function goReminders(tab){ showView('reminders'); setReminderTab(tab); }
+function navTo(id){ STATE.casesQuick = null; showView(id); }
 function renderCasesTable(keep){
   ensureCaseFilters();
   if (!keep) STATE.casesLimit = CASES_PAGE;
+  var quick = STATE.casesQuick, todayS = localDateStr();
+  renderQuickBar_();
   var q = ($('casesSearch').value || '').trim().toLowerCase();
   var fStatus = $('casesFilterStatus').value, fPriority = $('casesFilterPriority').value;
   var list = (STATE.cases||[]).filter(function(c){
     if (fStatus && c.Status !== fStatus) return false;
     if (fPriority && c.Priority !== fPriority) return false;
+    if (quick === 'open' && c.Status === 'مغلقة') return false;
+    if (quick === 'today' && c.CreatedDate !== todayS) return false;
     if (q && caseKey_(c).indexOf(q) === -1) return false;
     return true;
   });
